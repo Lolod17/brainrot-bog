@@ -46,18 +46,6 @@ Config.Rebirth = {
 }
 Config.BogBaronRebirths = 6 -- rebirths at which the Bog Baron panel fires
 
--- The Mud Tide.
-Config.Tide = {
-	Interval = 110, -- seconds between tides
-	Warning = 10, -- seconds of warning banner
-	SweepDuration = 8, -- seconds the wall takes to cross the map
-	CashLossFraction = 0.10, -- a tenth of cash lost when swallowed
-	WallHeight = 14,
-	WallThickness = 6,
-	StartDistance = 240, -- how far out the wall starts
-	EndDistance = 10, -- how close to the island centre it sweeps
-}
-
 -- Rarity roll weights (percent). They are normalised, so they always sum to one hundred.
 Config.RarityWeights = {
 	Common = 45,
@@ -89,6 +77,30 @@ Config.RarityRank = {
 	Legendary = 5,
 	Mythic = 6,
 	Secret = 7,
+}
+
+-- Validate the rarity tables agree: every weighted rarity has a colour and a rank, and the weights
+-- are all positive so a zero or negative weight cannot silently make a rarity unreachable.
+for rarity, weight in pairs(Config.RarityWeights) do
+	assert(Config.RarityColors[rarity], "Rarity " .. rarity .. " has a weight but no colour")
+	assert(Config.RarityRank[rarity], "Rarity " .. rarity .. " has a weight but no rank")
+	assert(weight > 0, "Rarity " .. rarity .. " has a non-positive weight")
+end
+for rarity, _ in pairs(Config.RarityColors) do
+	assert(Config.RarityWeights[rarity], "Rarity " .. rarity .. " has a colour but no weight")
+	assert(Config.RarityRank[rarity], "Rarity " .. rarity .. " has a colour but no rank")
+end
+
+-- The Mud Tide.
+Config.Tide = {
+	Interval = 110, -- seconds between tides
+	Warning = 10, -- seconds of warning banner
+	SweepDuration = 8, -- seconds the wall takes to cross the map
+	CashLossFraction = 0.10, -- a tenth of cash lost when swallowed
+	WallHeight = 14,
+	WallThickness = 6,
+	StartDistance = 240, -- how far out the wall starts
+	EndDistance = 10, -- how close to the island centre it sweeps
 }
 
 return Config

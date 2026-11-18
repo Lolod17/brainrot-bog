@@ -16,6 +16,8 @@ local MudTide = require(script.Parent.MudTide)
 
 local Demo = {}
 
+local sync -- injected by init: re-serialises a player to their client after a preset
+
 local function firstPlayer()
 	local list = Players:GetPlayers()
 	return list[1]
@@ -61,6 +63,7 @@ end
 
 -- Cover shot: on the raft, three placed characters around the player, pedestal glowing behind,
 -- tide under fifteen seconds, cash in the thousands, rate above a hundred.
+-- Anchors are read inside the preset: World.Build() fills them after this module is required.
 local function presetCover(player)
 	player = player or firstPlayer()
 	if not player then return "no player" end
@@ -69,14 +72,15 @@ local function presetCover(player)
 	placeOne(player, Cast.GetByName("Giga Shrimp"), 1)
 	placeOne(player, Cast.GetByName("Unicycle Alien"), 2)
 	placeOne(player, Cast.GetByName("Cosmic Lobster"), 3)
-	local s = PlayerState.Get(player)
-	s.nextTideOverride = nil
-	-- Walk the player onto their own raft so the shot reads as theirs.
+	-- Pin the tide countdown so the shot always reads the same number.
+	MudTide.SetCountdown(12)
+	-- Stand the player at the left edge of the pad row, out of the character signs.
 	local character = player.Character
 	if character and character.PrimaryPart then
 		local bounds = World.GetAnchors().DeckBounds[World.GetDeckIndex(player) or 1]
-		character:PivotTo(CFrame.new(bounds.center + Vector3.new(0, 6, 0)))
+		character:PivotTo(CFrame.new(bounds.center + Vector3.new(-13, 5.5, -3)))
 	end
+	if sync then sync(player) end
 	return "cover preset on " .. player.Name
 end
 
@@ -84,14 +88,16 @@ end
 local function presetDredge(player)
 	player = player or firstPlayer()
 	if not player then return "no player" end
-	local entry = Cast.GetByName("Croissant Sorcerer")
+	local entry = Cast.GetByName("The Investor") -- Mythic: reads clearly and is unambiguous on camera
 	local model = BrainrotFactory.CreateBrainrot(entry, World.GetAnchors().PedestalPosition, 0)
-	BrainrotFactory.StandInSlot(model, World.GetAnchors().PedestalPosition)
+	BrainrotFactory.StandOnPedestal(model, World.GetAnchors().PedestalPosition)
+	Dredge.RegisterStanding(model)
 	-- Park the player near the pedestal so the prompt is on screen.
 	local character = player.Character
 	if character and character.PrimaryPart then
 		character:PivotTo(CFrame.new(World.GetAnchors().PedestalPosition + Vector3.new(0, 3, 6)))
 	end
+	if sync then sync(player) end
 	return "dredge preset on " .. player.Name
 end
 
@@ -114,6 +120,7 @@ local function presetBase(player)
 		local bounds = World.GetAnchors().DeckBounds[World.GetDeckIndex(player) or 1]
 		character:PivotTo(CFrame.new(bounds.center + Vector3.new(0, 6, -2)))
 	end
+	if sync then sync(player) end
 	return "base preset on " .. player.Name
 end
 
@@ -133,6 +140,7 @@ local function presetTide(player)
 	if character and character.PrimaryPart then
 		character:PivotTo(CFrame.new(stand))
 	end
+	if sync then sync(player) end
 	MudTide.TriggerTideNow()
 	return "tide preset on " .. player.Name
 end
@@ -140,11 +148,13 @@ end
 -- Buy a deck slot for a player, paying the price (used by the tour and by hand-testing).
 local function demoBuySlot(player)
 	player = player or firstPlayer()
+	if not player then return "no player" end
 	local s = PlayerState.Get(player)
 	local price = math.ceil(Config.SlotUpgrade.BasePrice * Config.SlotUpgrade.Growth ^ (s.deckSlotsOwned - Config.DeckSlotsStart))
 	if s.deckSlotsOwned >= Config.DeckSlotsMax then return "deck maxed" end
 	if not PlayerState.SpendCash(s, price) then return "cannot afford" end
 	s.deckSlotsOwned += 1
+	if sync then sync(player) end
 	return "bought slot, now " .. s.deckSlotsOwned
 end
 
@@ -155,5 +165,6 @@ Demo.PresetTide = presetTide
 Demo.BuySlot = demoBuySlot
 Demo.PlaceOne = placeOne
 Demo.ResetLife = resetLife
+Demo.SetSync = function(fn) sync = fn end
 
 return Demo

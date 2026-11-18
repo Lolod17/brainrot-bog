@@ -40,7 +40,9 @@ local function part(props)
 	p.Material = props.Material or Enum.Material.SmoothPlastic
 	p.Color = props.Color or Color3.fromRGB(120, 120, 120)
 	p.Size = props.Size or Vector3.new(1, 1, 1)
-	p.Shape = props.Shape
+	if props.Shape then
+		p.Shape = props.Shape
+	end
 	p.Transparency = props.Transparency or 0
 	p.CastShadow = props.CastShadow ~= false
 	if props.CFrame then
@@ -234,7 +236,7 @@ local function buildSpawn()
 		Position = pos + Vector3.new(0, 3.4, 1.6),
 	})
 	anchors.SpawnPoint = pad
-	anchors.SpawnPosition = pos + Vector3.new(0, 3, 0)
+	anchors.SpawnPosition = pos + Vector3.new(0, 0.5, 0)
 end
 
 -- ---------- The fifth island: Toll Booth and Upgrade Shack ----------
@@ -302,22 +304,25 @@ local function buildRaft(index)
 	part({ Name = "RaftRim", Size = Vector3.new(half * 2 + 1, 1.2, 1), Color = rimColor, Material = Enum.Material.Wood, Position = center + Vector3.new(0, 2.6, half) })
 	part({ Name = "RaftRim", Size = Vector3.new(1, 1.2, half * 2), Color = rimColor, Material = Enum.Material.Wood, Position = center + Vector3.new(-half, 2.6, 0) })
 	part({ Name = "RaftRim", Size = Vector3.new(1, 1.2, half * 2), Color = rimColor, Material = Enum.Material.Wood, Position = center + Vector3.new(half, 2.6, 0) })
-	-- The painted deck pad with four glowing slots in a row (more rows unlock with slot upgrades).
-	local padCenter = center + Vector3.new(0, 2.3, 6)
+	-- The painted deck pad under the slot rows. Light warm slate so the middle of a shot reads as
+	-- a floor, not a void. It is anchored and collidable: it is the ground the characters stand on.
+	-- Top face lands on the deck top (deck planks centre y=2, half thickness 0.3 -> top y=2.3).
+	local padCenter = Vector3.new(center.X, 2.2, center.Z + 2.5)
+	local padTopY = padCenter.Y + 0.1
 	part({
 		Name = "DeckPad",
-		Size = Vector3.new(14, 0.2, 9),
-		Color = Color3.fromRGB(40, 40, 48),
-		Material = Enum.Material.Neon,
+		Size = Vector3.new(32, 0.2, 17),
+		Color = Color3.fromRGB(120, 112, 104),
+		Material = Enum.Material.Slate,
 		Position = padCenter,
-		CanCollide = false,
 	})
+	-- The four first-row slot squares glow pale cyan; further rows sit behind them.
 	for i = 0, 3 do
-		local slotPos = padCenter + Vector3.new((i - 1.5) * 3.4, 0.15, 0)
+		local slotPos = Vector3.new(padCenter.X + (i - 1.5) * 7.2, padTopY + 0.01, padCenter.Z - 4.5)
 		part({
 			Name = "DeckSlotGlow",
-			Size = Vector3.new(2.6, 0.1, 2.6),
-			Color = Color3.fromRGB(120, 255, 200),
+			Size = Vector3.new(3.2, 0.04, 3.2),
+			Color = Color3.fromRGB(170, 240, 255),
 			Material = Enum.Material.Neon,
 			Position = slotPos,
 			CanCollide = false,
@@ -349,34 +354,59 @@ local function buildRaft(index)
 	bt.TextStrokeTransparency = 0.2
 	bt.Parent = bannerText
 
-	-- A floating sign that says whose base it is once a player owns it.
-	local ownerSign = part({ Name = "DeckOwnerSign", Size = Vector3.new(10, 2.4, 0.3), Color = Color3.fromRGB(40, 40, 48), Material = Enum.Material.Neon, Position = center + Vector3.new(0, 6, half - 1), CanCollide = false, Transparency = 1 })
-	local ownerGui = Instance.new("BillboardGui")
+	-- A small, muted wooden owner sign at the deck's outer edge toward open water (away from the
+	-- island), facing the deck. Muted wood with dark text (not a bright banner) so it never blocks
+	-- the characters; it carries the raft's number so the four rafts differ.
+	local away = Vector3.new(center.X - islandCenter.X, 0, center.Z - islandCenter.Z).Unit
+	local signPos = Vector3.new(center.X, 2.3 + 6, center.Z) + away * 15
+	local ownerSign = part({
+		Name = "DeckOwnerSign",
+		Size = Vector3.new(6, 1.6, 0.3),
+		Color = Color3.fromRGB(110, 82, 52),
+		Material = Enum.Material.Wood,
+		CFrame = CFrame.lookAt(signPos, Vector3.new(center.X, 8.3, center.Z)),
+		CanCollide = false,
+	})
+	local ownerGui = Instance.new("SurfaceGui")
 	ownerGui.Name = "OwnerLabel"
-	ownerGui.Size = UDim2.fromOffset(360, 80)
-	ownerGui.StudsOffset = Vector3.new(0, 1.5, 0)
-	ownerGui.AlwaysOnTop = true
+	ownerGui.Face = Enum.NormalId.Front
+	ownerGui.CanvasSize = Vector2.new(600, 160)
+	ownerGui.LightInfluence = 0
 	ownerGui.Enabled = false
 	ownerGui.Parent = ownerSign
-	local ownerLabel = Instance.new("TextLabel")
-	ownerLabel.Size = UDim2.fromScale(1, 1)
-	ownerLabel.BackgroundTransparency = 1
-	ownerLabel.Text = ""
-	ownerLabel.TextColor3 = raftBannerColors[index]
-	ownerLabel.TextScaled = true
-	ownerLabel.Font = Enum.Font.FredokaOne
-	ownerLabel.TextStrokeTransparency = 0.2
-	ownerLabel.Parent = ownerGui
+	local backGui = ownerGui:Clone()
+	backGui.Name = "OwnerLabelBack"
+	backGui.Face = Enum.NormalId.Back
+	backGui.Parent = ownerSign
+	for _, g in ipairs({ ownerGui, backGui }) do
+		local ownerLabel = Instance.new("TextLabel")
+		ownerLabel.Size = UDim2.fromScale(1, 1)
+		ownerLabel.BackgroundTransparency = 1
+		ownerLabel.Text = raftNames[index] .. " " .. index -- the raft's own name+number until claimed
+		ownerLabel.TextColor3 = Color3.fromRGB(45, 32, 20)
+		ownerLabel.TextScaled = true
+		ownerLabel.Font = Enum.Font.FredokaOne
+		ownerLabel.TextStrokeTransparency = 1
+		ownerLabel.Parent = g
+	end
+	ownerGui.Enabled = true
+	backGui.Enabled = true
 
 	anchors.DeckPadCenters[index] = padCenter
-	anchors.DeckBounds[index] = { center = center, half = half }
+	anchors.DeckBounds[index] = { center = center, half = half, padHalfX = 16, padHalfZ = 8.5, padTopY = padTopY }
 	anchors.DeckSigns[index] = ownerSign
-	-- Deck slot centres: first four in a row, further rows behind them.
+	-- The raft's own name is already on the owner sign (set inline above) so the four rafts differ
+	-- even before anyone claims one; a claiming player replaces the text through SetDeckOwnerLabel.
+	-- Deck slot centres: row one (slots 1-4) at the pad front, row two behind it.
 	local slotCenters = {}
 	for i = 1, Config.DeckSlotsMax do
 		local col = (i - 1) % 4
 		local row = math.floor((i - 1) / 4)
-		slotCenters[i] = padCenter + Vector3.new((col - 1.5) * 3.4, 0.1, row * 3.0)
+		slotCenters[i] = Vector3.new(
+			padCenter.X + (col - 1.5) * 7.2,
+			padTopY,
+			padCenter.Z - 4.5 - row * 7
+		)
 	end
 	anchors.DeckSlotCenters[index] = slotCenters
 
@@ -521,43 +551,26 @@ end
 -- ---------- Lighting ----------
 local function buildLighting()
 	local Lighting = game:GetService("Lighting")
-	Lighting.ClockTime = 0 -- night
-	Lighting.Ambient = Color3.fromRGB(40, 70, 70) -- deep teal
-	Lighting.OutdoorAmbient = Color3.fromRGB(45, 75, 78)
-	Lighting.Brightness = 1.4
+	-- A readable early evening: the sun is low, the world is lit, and the sky is visible.
+	Lighting.ClockTime = 16.2
+	Lighting.Ambient = Color3.fromRGB(120, 130, 144)
+	Lighting.OutdoorAmbient = Color3.fromRGB(134, 146, 160)
+	Lighting.Brightness = 4.5
 	Lighting.GlobalShadows = true
-	Lighting.FogColor = Color3.fromRGB(38, 62, 64)
-	Lighting.FogEnd = 260
-	Lighting.FogStart = 60
-	Lighting.Technology = Enum.Technology.ShadowMap
+	Lighting.FogColor = Color3.fromRGB(120, 140, 160)
+	Lighting.FogEnd = 500
+	Lighting.FogStart = 180
+	-- Lighting.Technology is set by the place file; the live DataModel does not permit a
+	-- script to rewrite it, so leave it alone here.
 
-	-- A moon-ish directional light, cool and bright enough to read by.
-	local moon = Instance.new("Sky")
-	moon.SkyboxBb = Color3.fromRGB(20, 34, 40)
-	moon.SkyboxC = Color3.fromRGB(40, 70, 78)
-	moon.SkyboxD = Color3.fromRGB(18, 30, 36)
-	moon.SkyboxF = Color3.fromRGB(30, 52, 58)
-	moon.SkyboxKt = Color3.fromRGB(60, 90, 95)
-	moon.SunAngularSize = 8
-	moon.MoonAngularSize = 18
-	moon.StarCount = 1200
-	moon.Sunrise = 0
-	moon.Parent = Lighting
-
-	local dir = Instance.new("DirectionalLight")
-	dir.Name = "MoonLight"
-	dir.Color = Color3.fromRGB(180, 215, 230)
-	dir.Brightness = 1.2
-	dir.CFrame = CFrame.new(Vector3.new(0, 60, 0), Vector3.new(0.4, -1, 0.25))
-	dir.Parent = Lighting
-
+	-- A low sun and a default skybox so the horizon reads.
 	local atmo = Instance.new("Atmosphere")
-	atmo.Density = 0.32
+	atmo.Density = 0.22
 	atmo.Offset = 0.3
-	atmo.Color = Color3.fromRGB(150, 185, 190)
-	atmo.Decay = Color3.fromRGB(70, 100, 105)
-	atmo.Glare = 0.15
-	atmo.Haze = 1.4
+	atmo.Color = Color3.fromRGB(170, 190, 210)
+	atmo.Decay = Color3.fromRGB(110, 130, 155)
+	atmo.Glare = 0.12
+	atmo.Haze = 0.9
 	atmo.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")
@@ -608,7 +621,7 @@ local function getDeckOwner(index)
 	return deckOwners[index]
 end
 
--- Is this player's character standing on their own deck pad?
+-- Is this player's character standing on their own deck pad (either slot row)?
 local function isOnOwnDeck(player, position)
 	local index = getDeckIndex(player)
 	if not index then return false end
@@ -616,17 +629,20 @@ local function isOnOwnDeck(player, position)
 	local pad = anchors.DeckPadCenters[index]
 	if not bounds or not pad then return false end
 	local d = position - pad
-	return math.abs(d.X) <= 7 and math.abs(d.Z) <= 4.5 and math.abs(d.Y) <= 4
+	return math.abs(d.X) <= bounds.padHalfX and math.abs(d.Z) <= bounds.padHalfZ and math.abs(d.Y) <= 4
 end
 
 local function setDeckOwnerLabel(index, text)
 	local sign = anchors.DeckSigns[index]
 	if not sign then return end
-	local gui = sign:FindFirstChild("OwnerLabel")
-	if gui then
-		local label = gui:FindFirstChildOfClass("TextLabel")
-		if label then label.Text = text end
-		gui.Enabled = text ~= nil and text ~= ""
+	local visible = text ~= nil and text ~= ""
+	for _, faceName in ipairs({ "OwnerLabel", "OwnerLabelBack" }) do
+		local gui = sign:FindFirstChild(faceName)
+		if gui then
+			local label = gui:FindFirstChildOfClass("TextLabel")
+			if label then label.Text = text or "" end
+			gui.Enabled = visible
+		end
 	end
 end
 
@@ -641,13 +657,13 @@ local function build()
 	for i = 1, #raftCenters do
 		buildRaft(i)
 	end
-	-- Boardwalks from the island edge to each raft's near corner, and out to the toll island.
+	-- Boardwalks from the island edge to each raft's island-facing corner.
 	local islandHalf = 23
 	boardwalk(Vector3.new(-islandHalf, 0, -islandHalf), Vector3.new(-raftHalf, 0, -raftHalf) + raftCenters[1])
 	boardwalk(Vector3.new(islandHalf, 0, -islandHalf), Vector3.new(raftHalf, 0, -raftHalf) + raftCenters[2])
 	boardwalk(Vector3.new(-islandHalf, 0, islandHalf), Vector3.new(-raftHalf, 0, raftHalf) + raftCenters[3])
 	boardwalk(Vector3.new(islandHalf, 0, islandHalf), Vector3.new(raftHalf, 0, raftHalf) + raftCenters[4])
-	boardwalk(Vector3.new(islandHalf, 0, 0), Vector3.new(-18, 0, 0) + tollIslandCenter)
+	boardwalk(Vector3.new(islandHalf, 0, 0), Vector3.new(-raftHalf, 0, 0) + tollIslandCenter)
 	buildScenery()
 
 	anchors.RaftCenters = raftCenters

@@ -3,7 +3,6 @@
 -- boardwalks or the mud islands when the wall passes them is swallowed.
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 
 local Config = require(script.Parent.Config)
 local World = require(script.Parent.World)
@@ -14,6 +13,7 @@ local MudTide = {}
 
 local sendAlert -- injected by init
 local onSwallowed -- injected by init: client-side shake and flash for one player
+local onPhase -- injected by init: fans a phase name out to every client
 
 local tideState = {
 	nextTideAt = 0,
@@ -100,6 +100,7 @@ end
 
 local function swallow(player)
 	local s = PlayerState.Get(player)
+	if not s then return end
 	local character = player.Character
 	local carriedName = s.carried and s.carried.name or nil
 	if s.carried then
@@ -120,6 +121,7 @@ local function runTide()
 	local T = Config.Tide
 	-- Warning.
 	tideState.warning = true
+	if onPhase then onPhase("warning") end
 	if sendAlert then
 		for _, player in ipairs(Players:GetPlayers()) do
 			sendAlert(player, "tide", "MUD TIDE INCOMING", "Get to a raft")
@@ -133,6 +135,7 @@ local function runTide()
 	local startX = center.X - T.StartDistance
 	local endX = center.X - T.EndDistance
 	moveWallTo(startX)
+	local swallowedThisSweep = {} -- player -> true, so one sweep cannot swallow the same player twice
 	local elapsed = 0
 	while elapsed < T.SweepDuration do
 		local dt = task.wait(0.05)
@@ -144,9 +147,10 @@ local function runTide()
 		-- The wall swallows anyone it passes.
 		for _, player in ipairs(Players:GetPlayers()) do
 			local character = player.Character
-			if character and character.PrimaryPart and isExposed(player) then
+			if character and character.PrimaryPart and isExposed(player) and not swallowedThisSweep[player] then
 				local px = character.PrimaryPart.Position.X
 				if px >= x - 4 and px <= x + 4 then
+					swallowedThisSweep[player] = true
 					swallow(player)
 				end
 			end
@@ -154,10 +158,7 @@ local function runTide()
 	end
 	-- Drain: the wall retreats back out quickly.
 	tideState.sweeping = false
-	local drain = TweenService:Create(tideState.wall:FindFirstChild("TideWall"), TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		Position = Vector3.new(center.X - 600, Config.Tide.WallHeight / 2, center.Z),
-	})
-	-- Tween the whole model's parts by moving them each.
+	if onPhase then onPhase("drain") end
 	task.spawn(function()
 		local startX2 = endX
 		local targetX = center.X - 600
@@ -201,10 +202,18 @@ local function isSweeping() return tideState.sweeping end
 
 local function setAlert(fn) sendAlert = fn end
 local function setOnSwallowed(fn) onSwallowed = fn end
+local function setOnPhase(fn) onPhase = fn end
 
 -- Force a tide now (used by Demo to reach the tide screenshot).
 local function triggerTideNow()
 	tideState.nextTideAt = os.clock()
+end
+
+-- Pin the countdown to a fixed number of seconds from now (used by Demo for the cover shot, so the
+-- banner reads a specific number instead of whatever the natural interval happens to be at).
+local function setCountdown(seconds)
+	tideState.nextTideAt = os.clock() + seconds
+	tideState.remaining = seconds
 end
 
 MudTide.StartCycle = startCycle
@@ -213,6 +222,8 @@ MudTide.IsWarning = isWarning
 MudTide.IsSweeping = isSweeping
 MudTide.SetAlert = setAlert
 MudTide.SetOnSwallowed = setOnSwallowed
+MudTide.SetOnPhase = setOnPhase
 MudTide.TriggerTideNow = triggerTideNow
+MudTide.SetCountdown = setCountdown
 
 return MudTide

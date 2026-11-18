@@ -64,6 +64,7 @@ local function incomePerSecond(s)
 end
 
 local function addCash(s, amount)
+	if not s then return end
 	s.cash += amount
 	if amount > 0 then
 		s.totalEarned += amount
@@ -71,6 +72,7 @@ local function addCash(s, amount)
 end
 
 local function spendCash(s, amount)
+	if not s then return false end
 	if s.cash < amount then return false end
 	s.cash -= amount
 	return true
@@ -90,6 +92,7 @@ local function placeCarried(s)
 		end
 	end
 	if not slot then return nil end
+	if not entry.model then return nil end -- a destroyed model cannot be placed
 	entry.slot = slot
 	entry.model:SetAttribute("Placed", true)
 	entry.model:SetAttribute("CarriedBy", nil)

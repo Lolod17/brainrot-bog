@@ -313,12 +313,17 @@ end
 local function rollCharacter()
 	local rarity = rollRarity()
 	local pool = byRarity[rarity]
+	if not pool or #pool == 0 then
+		-- Fall back to the whole cast rather than indexing an empty pool.
+		return ENTRIES[math.random(#ENTRIES)]
+	end
 	return pool[math.random(#pool)]
 end
 
--- Every character of one rarity.
+-- Every character of one rarity. Returns an empty table rather than erroring when the config names a
+-- rarity that the cast does not carry.
 local function charactersOfRarity(rarity)
-	local pool = byRarity[rarity]
+	local pool = byRarity[rarity] or {}
 	local copy = {}
 	for _, entry in ipairs(pool) do table.insert(copy, entry) end
 	return copy

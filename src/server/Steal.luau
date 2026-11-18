@@ -14,13 +14,29 @@ local Steal = {}
 local sendAlert -- injected by init
 local onStolen -- injected by init: hands the carried entry to the thief
 
+-- Find the placed entry (and its owner's state and slot) that this model belongs to.
+local function findEntry(model)
+	local ownerUserId = model:GetAttribute("OwnerUserId") or 0
+	if ownerUserId == 0 then return nil end
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other.UserId == ownerUserId then
+			for _, entry in ipairs(PlayerState.GetPlaced(PlayerState.Get(other))) do
+				if entry.model == model then
+					return entry, PlayerState.Get(other), entry.slot
+				end
+			end
+		end
+	end
+	return nil
+end
+
 local function attachStealPrompt(model, ownerPlayer)
 	local old = model.PrimaryPart and model.PrimaryPart:FindFirstChild("StealPrompt")
 	if old then old:Destroy() end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "StealPrompt"
 	prompt.ActionText = "Steal"
-	prompt.ObjectText = "Hold to steal " .. model:GetAttribute("Name")
+	prompt.ObjectText = "Hold to steal " .. (model:GetAttribute("Name") or "a brainrot")
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = Config.Steal.HoldTime
 	prompt.MaxActivationDistance = 8
@@ -28,9 +44,11 @@ local function attachStealPrompt(model, ownerPlayer)
 	prompt.Parent = model.PrimaryPart
 
 	prompt.Triggered:Connect(function(thief)
+		if not thief then return end
 		local ownerUserId = model:GetAttribute("OwnerUserId") or 0
+		if ownerUserId == 0 then return end -- not a placed, ownable character
 		if thief.UserId == ownerUserId then return end
-		local entry, ownerState, slot = findEntry(thief, model)
+		local entry, ownerState, slot = findEntry(model)
 		if not entry then return end
 		local thiefState = PlayerState.Get(thief)
 		local now = os.clock()
@@ -59,20 +77,6 @@ local function attachStealPrompt(model, ownerPlayer)
 		end
 		if sendAlert then sendAlert(thief, "good", "Stole " .. entry.name, "Walk it home before the tide") end
 	end)
-end
-
--- Find the placed entry on some player's deck that this model belongs to.
-local function findEntry(thief, model)
-	for _, other in ipairs(Players:GetPlayers()) do
-		if other.UserId == (model:GetAttribute("OwnerUserId") or 0) then
-			for _, entry in ipairs(PlayerState.GetPlaced(PlayerState.Get(other))) do
-				if entry.model == model then
-					return entry, PlayerState.Get(other), entry.slot
-				end
-			end
-		end
-	end
-	return nil
 end
 
 local function setAlert(fn) sendAlert = fn end
